@@ -1,0 +1,28 @@
+#include <Wire.h>
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+#define CE_PIN 9
+#define CSN_PIN 10
+const int BUFFER_SIZE = 6;
+const uint64_t pipe = 0x42069187ACAB;
+RF24 radio(CE_PIN, CSN_PIN);
+char buf[BUFFER_SIZE];
+char rad[6];
+void setup(){
+  Serial.begin(9600);
+  radio.begin();
+  radio.setPALevel(RF24_PA_MAX);
+  radio.openWritingPipe(pipe);
+  radio.stopListening();
+
+}
+void loop(){ 
+ if (Serial.available() > 0) {
+    int rlen = Serial.readBytesUntil('\n', buf, BUFFER_SIZE);
+    for(int i = 0; i < rlen; i++){
+      rad[i]=buf[i];
+    }
+    radio.write(rad,6);
+  }
+}
