@@ -1,0 +1,57 @@
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+#define CE_PIN 9
+#define CSN_PIN 10
+#include <Wire.h>
+#include <Servo.h>
+
+
+const uint64_t pipe = 0x42069187ACAB;
+RF24 radio(CE_PIN, CSN_PIN);
+char data[6];
+int vel = 6;
+int geschw;
+int m1=7;
+int m2=5;
+Servo myservo;
+void setup()
+ {
+  myservo.attach(3);
+  pinMode(vel,OUTPUT);
+  pinMode(m1,OUTPUT);
+  pinMode(m2,OUTPUT);
+  Serial.begin(9600);
+  radio.begin();
+  radio.setPALevel(RF24_PA_MAX);
+  radio.openReadingPipe(1,pipe);
+  radio.startListening();;
+
+
+ }
+ 
+void loop(){
+ if(radio.available()){
+    String zahl;
+    radio.read( data, 6 );
+    zahl=data;
+    long int funk=zahl.toInt();
+    geschw=floor(funk/1000);
+    if(geschw>150){
+      reverse();
+    }
+    else{
+    int v=map(geschw,0,100,0,255);
+    digitalWrite(m1,HIGH);
+    digitalWrite(m2,LOW);
+    analogWrite(vel,v);
+    }
+    int lenk=funk-(geschw*1000);
+    myservo.write(map(lenk,0,100,0,90));
+ }
+}
+void reverse(){
+  digitalWrite(m1,LOW);
+  digitalWrite(m2,HIGH);
+  analogWrite(vel,20);
+ }
