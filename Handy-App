@@ -1,0 +1,222 @@
+package com.example.myapplication;
+
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AppCompatActivity;
+
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbDeviceConnection;
+import android.hardware.usb.UsbManager;
+import android.os.Build;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.MotionEvent;
+import android.view.View;
+import android.widget.Button;
+import android.widget.ProgressBar;
+import android.widget.SeekBar;
+import android.widget.Switch;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Timer;
+import com.felhr.usbserial.UsbSerialDevice;
+import com.felhr.usbserial.UsbSerialInterface;
+
+import java.io.UnsupportedEncodingException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TimerTask;
+
+
+@RequiresApi(api = Build.VERSION_CODES.KITKAT)
+public class MainActivity extends AppCompatActivity {
+    private TextView textView;
+    private Button btnOff;
+    private Button btnOn;
+    public int gasold;
+    private SeekBar seekBar1;
+    private SeekBar seekBar2;
+    public boolean richter = false;
+    private boolean gang = false;
+    public boolean gas = false;
+    public boolean lenk = false;
+    public final String ACTION_USB_PERMISSION = "com.harihararan.arduino.USB_PERMISSION";
+    UsbDevice device;
+    UsbManager usbManager;
+    UsbSerialDevice serialPort;
+    UsbDeviceConnection connection;
+    private final BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent.getAction().equals(ACTION_USB_PERMISSION)) {
+                boolean granted = intent.getExtras().getBoolean(UsbManager.EXTRA_PERMISSION_GRANTED);
+                if (granted) {
+                    connection = usbManager.openDevice(device);
+                    serialPort = UsbSerialDevice.createUsbSerialDevice(device, connection);
+                    if (serialPort != null) {
+                        if (serialPort.open()) {
+                            serialPort.setBaudRate(9600);
+                            serialPort.setDataBits(UsbSerialInterface.DATA_BITS_8);
+                            serialPort.setStopBits(UsbSerialInterface.STOP_BITS_1);
+                            serialPort.setParity(UsbSerialInterface.PARITY_NONE);
+                            serialPort.setFlowControl(UsbSerialInterface.FLOW_CONTROL_OFF);
+                            serialPort.read(mCallBack);
+                            Toast.makeText(context, "Serial connection Opened!", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Log.d("SERIAL", "PORT NOT OPEN");
+                            Toast.makeText(context, "PORT NOT OPEN", Toast.LENGTH_SHORT).show();
+                        }
+                    } else {
+                        Log.d("SERIAL", "PORT IS NULL");
+                        Toast.makeText(context, "PORT IS NULL", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Log.d("SERIAL", "PERM NOT GRANTED");
+                    Toast.makeText(context, "PERM NOT GRANTED", Toast.LENGTH_SHORT).show();
+                }
+            } else if (intent.getAction().equals(UsbManager.ACTION_USB_ACCESSORY_ATTACHED)) {
+
+
+                onClickconectar(btnOff);
+            } else if (intent.getAction().equals(UsbManager.ACTION_USB_ACCESSORY_DETACHED)) {
+                onClickdesconectar(btnOn);
+            }
+
+        }
+
+
+    };
+
+    public void setRf() {
+        String b = String.format("%03d", seekBar1.getProgress());
+        String a = String.format("%03d", seekBar2.getProgress());
+        String c = b + a;
+        serialPort.write(c.getBytes());
+        lenk = false;
+        gang = false;
+    }
+
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        usbManager = (UsbManager) getSystemService(this.USB_SERVICE);
+        btnOff = findViewById(R.id.btnoff);
+        btnOn = findViewById(R.id.btnon);
+        seekBar2 = findViewById(R.id.seekBar2);
+        seekBar1 = findViewById(R.id.seekBar);
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(ACTION_USB_PERMISSION);
+        filter.addAction(UsbManager.ACTION_USB_ACCESSORY_ATTACHED);
+        filter.addAction(UsbManager.ACTION_USB_ACCESSORY_DETACHED);
+        registerReceiver(broadcastReceiver, filter);
+        seekBar1.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (!gang) {
+                    String b = String.format("%03d", progress);
+                    String a = String.format("%03d", seekBar2.getProgress());
+                    String c = b + a;
+                    serialPort.write(c.getBytes());
+                    try {
+                        Thread.sleep(50);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                gas = true;
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                seekBar1.setProgress(0);
+                gas = false;
+
+            }
+        });
+        seekBar2.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                    String a = String.format("%03d", progress);
+                    String b = String.format("%03d", seekBar1.getProgress());
+                    if(gang)b="999";
+                    String c = b + a;
+                    serialPort.write(c.getBytes());
+                    try {
+                        Thread.sleep(50);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+
+            }
+
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                seekBar.setProgress(50);
+                lenk = false;
+
+            }
+
+        });
+
+    }
+
+    UsbSerialInterface.UsbReadCallback mCallBack = (arg0) -> {
+        String data = null;
+        data = new String(arg0, StandardCharsets.UTF_8);
+        data.concat("\n");
+    };
+
+    public void onClickconectar(View view) {
+        HashMap<String, UsbDevice> usbDevices = usbManager.getDeviceList();
+        if (!usbDevices.isEmpty()) {
+            boolean keep = true;
+            for (Map.Entry<String, UsbDevice> entry : usbDevices.entrySet()) {
+                device = entry.getValue();
+                int deviceVID = device.getVendorId();
+                if (deviceVID == 6790 || deviceVID == 1659) {
+                    PendingIntent pi = PendingIntent.getBroadcast(this, 0, new Intent(ACTION_USB_PERMISSION), 0);
+                    usbManager.requestPermission(device, pi);
+                    keep = false;
+                } else {
+                    connection = null;
+                    device = null;
+                }
+                if (!keep)
+                    break;
+            }
+        }
+    }
+
+    public void onClickdesconectar(View view) {
+        serialPort.close();
+    }
+
+    public void reverse(View view) {
+        gang=!gang;
+        if(gang){
+        String c="999"+String.format("%03d", seekBar2.getProgress());
+        serialPort.write(c.getBytes());
+    }else{
+            String d ="000"+String.format("%03d", seekBar2.getProgress());
+            serialPort.write(d.getBytes());
+        }
+    }
+}
